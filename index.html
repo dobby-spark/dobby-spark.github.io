@@ -103,7 +103,7 @@
         };
         function connect() {
 
-            socket = new WebSocket("wss://"+document.getElementById("appIp").value+":"+document.getElementById("appPort").value, "vr-spark");
+            socket = new WebSocket("ws://"+document.getElementById("appIp").value+":"+document.getElementById("appPort").value, "vr-spark");
             roomId = document.getElementById("roomId").value;
             memberId = document.getElementById("memberId").value;
 
