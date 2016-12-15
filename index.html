@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Client for ifCollab</title>
+    <script src="https://aframe.io/releases/0.3.2/aframe.min.js"></script>
+      <script src="https://rawgit.com/bryik/aframe-bmfont-text-component/master/dist/aframe-bmfont-text-component.min.js"></script>
+    <script type="text/javascript">
+        var socket;
+        var connected = false;
+        var roomId;
+        var memberId;
+        var members = [];
+        var count = 0;
+        var positions = ["-1.7 .5 -1.06", "1.7 .5 -1.06"];
+        var thetas = [0, -30, +30, -60, +60, -90, +90];
+        const Radius = 2;
+        const toggle = () => {
+            if (!connected) {
+                document.getElementById("roomId").style.visibility = "visible";
+                document.getElementById("memberId").style.visibility = "visible";
+                document.getElementById("connect").style.visibility = "visible";
+                document.getElementById("table").style.visibility = "hidden";
+            } else {
+                document.getElementById("roomId").style.visibility = "hidden";
+                document.getElementById("memberId").style.visibility = "hidden";
+                document.getElementById("connect").style.visibility = "hidden";
+                document.getElementById("table").style.visibility = "visible";
+            }
+        };
+        const printMsg = (sender, msg) => {
+            // var txt = document.createTextNode(sender + ": " + msg);
+            // var para = document.createElement("p");
+            // para.appendChild(txt);
+            // document.getElementById("room").appendChild(para);
+            document.getElementById("m-" + sender).setAttribute("bmfont-text", "text:"+msg);
+        };
+        const getCoord = (theta, r) => {
+            // var mul = theta == 0 ? -1 : 1;
+            // theta = theta < 0 ? 360 + theta : theta;
+            return {
+                x: (r * Math.sin(theta * Math.PI / 180)),
+                y: 1,
+                z: (-1 * r * Math.cos(theta * Math.PI / 180))
+            }
+        };
+        const strCoord = (xyz) => {
+            return xyz.x.toFixed(2) + " " + xyz.y.toFixed(2) + " " + xyz.z.toFixed(2);
+        };
+        const strRot = (theta) => {
+            return "0 " + (-1 * theta) + " 0";
+        }
+        const addMember = (memberId) => {
+            var popup = document.createElement("a-image");
+            var popm = document.createElement("a-entity");
+            var avatar = document.createElement("a-image");
+            var label = document.createElement("a-entity");
+            var xyz = getCoord(thetas[count], Radius);
+            var rot = strRot(thetas[count]);
+            console.log("Adding", memberId, "@", strCoord(xyz), "rotated:", rot);
+            popup.id = "p-" + memberId;
+            popup.setAttribute("src", "#im-callout");
+            popup.setAttribute("opacity",".5");
+            popup.setAttribute("transparent","true");
+            popup.setAttribute("position", strCoord(xyz));
+            popup.setAttribute("rotation", rot);
+            xyz.z += 0.1;
+            popm.id = "m-" + memberId;
+            popm.setAttribute("position", strCoord({
+                x: xyz.x - 0.3,
+                y: xyz.y + 0.15,
+                z: xyz.z + 0.2}));
+            popm.setAttribute("rotation", rot);
+            popm.setAttribute("scale", "0.5 0.5 0.5");
+            xyz.y -= 1;
+            avatar.id = "a-" + memberId;
+            avatar.setAttribute("src", "#im-man");
+            avatar.setAttribute("opacity", "0.5");
+            avatar.setAttribute("transparent", "true");
+            avatar.setAttribute("position", strCoord(xyz));
+            avatar.setAttribute("rotation", rot);
+            xyz.z += 0.2;
+            xyz.x -= 0.2;
+            xyz.y -= 0.4;
+            label.id = "l-" + memberId;
+            label.setAttribute("bmfont-text", "text:"+memberId);
+            label.setAttribute("position", strCoord(xyz));
+            label.setAttribute("rotation", rot);
+            document.getElementById("table").appendChild(popup);
+            document.getElementById("table").appendChild(popm);
+            document.getElementById("table").appendChild(avatar);
+            document.getElementById("table").appendChild(label);
+            count++;
+        };
+        function send() {
+            var data = {
+                roomid: roomId,
+                memberid: memberId,
+                message: document.getElementById("message").value
+            }
+            printMsg("me", data.message);
+            socket.send(JSON.stringify(data));
+            document.getElementById("message").value="";
+        };
+        function connect() {
+
+            socket = new WebSocket("ws://"+document.getElementById("appIp").value+":"+document.getElementById("appPort").value);
+            roomId = document.getElementById("roomId").value;
+            memberId = document.getElementById("memberId").value;
+
+            socket.onopen = function () {
+                var msg = {
+                    roomid: roomId,
+                    memberid: memberId
+                }
+                socket.send(JSON.stringify(msg));
+            };
+            socket.onmessage = function (e) {
+                console.log("got:", e);
+                var msg = JSON.parse(e.data);
+                if (msg.status) {
+                    alert("status: " + msg.status + "\nreason: " + msg.msg);
+                    if (msg.status == 200 || msg.status == 429) {
+                        connected = true;
+                        toggle();
+                    }
+                } else if (msg.roomid) {
+                    console.log("notification of a new member: " + msg.memberid);
+                    if (members.indexOf(msg.memberid) == -1) {
+                        addMember(msg.memberid);
+                        members.push(msg.memberid);
+                    }
+                } else {
+                    printMsg(msg.memberid, msg.message);
+                }
+            };
+            socket.onerror = function (e) {
+                alert("An error occured while connecting... " + e.data);
+                connected = false;
+                toggle();
+            };
+            socket.onclose = function () {
+                alert("The connection has been closed");
+                connected = false;
+                toggle();
+            };
+        };
+    </script>
+</head>
+
+<body>
+    <input id="appIp" type="text" placeholder="enter app IP"/>
+    <input id="appPort" type="text" placeholder="enter app port"/>
+    <input id="roomId" type="text" placeholder="enter room id"/>
+    <input id="memberId" type="text" placeholder="enter member id"/>
+    <input id="connect" type="button" value="Connect" onclick="connect()" />
+        <a-scene id="table">
+            <a-assets>
+                <img id="im-man" src="assets/man.png">
+                <img id="im-callout" src="assets/callout.png">
+            </a-assets>
+            <a-sky color="#ECECEC"></a-sky>
+        </a-scene>
+</body>
+</html>
